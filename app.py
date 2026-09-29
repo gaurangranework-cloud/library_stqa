@@ -3,6 +3,7 @@ import os
 import re
 import csv
 import io
+import time
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, session, render_template, Response
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -17,7 +18,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'super_secret_digital_library_key'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
 def get_db_path():
-    """Return a writable database path for serverless environments like Vercel"""
+    """Return a writable database path, ensuring compatibility with serverless environments like Vercel"""
     is_serverless = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
     src_db = os.path.join(BASE_DIR, 'library.db')
     local_writable = os.access(BASE_DIR, os.W_OK)
@@ -29,7 +30,7 @@ def get_db_path():
                 import shutil
                 shutil.copyfile(src_db, tmp_db)
             except Exception as e:
-                pass
+                print(f"Warning: could not copy pre-seeded database to /tmp: {e}")
         return tmp_db
     return src_db
 
@@ -39,6 +40,16 @@ def handle_500(err):
     return jsonify({
         "error": f"Internal Server Error: {str(err)}",
         "traceback": traceback.format_exc()
+    }), 500
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(err):
+    import traceback
+    print(f"Unhandled Exception: {err}")
+    traceback.print_exc()
+    return jsonify({
+        "error": f"Internal error: {str(err)}",
+        "detail": str(err)
     }), 500
 
 # --- TEST CASES DATA ---
@@ -76,10 +87,7 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
+def _create_tables_and_seeds(cursor):
     # Create users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -227,8 +235,15 @@ def init_db():
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (tc['id'], tc['module'], tc['scenario'], tc.get('input_data', ''), tc['expected_result'], tc['actual_result'], tc['status'], tc['test_type']))
 
-    conn.commit()
-    conn.close()
+def init_db():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        _create_tables_and_seeds(cursor)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Warning: init_db encountered an exception: {e}")
 
 # --- UTILS ---
 def get_current_user():
@@ -1063,6 +1078,10 @@ def export_csv(export_type):
     )
 
 @app.route('/')
+@app.route('/api')
+@app.route('/api/')
+@app.route('/api/index')
+@app.route('/api/index.py')
 def index():
     return render_template('index.html')
 
@@ -1071,4 +1090,3 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-
