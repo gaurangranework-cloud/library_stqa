@@ -7,10 +7,39 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, session, render_template, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 
-app = Flask(__name__)
-app.secret_key = 'super_secret_digital_library_key'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, 'templates')
+)
+app.secret_key = os.environ.get('SECRET_KEY', 'super_secret_digital_library_key')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
-DB_PATH = 'library.db'
+
+def get_db_path():
+    """Return a writable database path for serverless environments like Vercel"""
+    is_serverless = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+    src_db = os.path.join(BASE_DIR, 'library.db')
+    local_writable = os.access(BASE_DIR, os.W_OK)
+    
+    if is_serverless or not local_writable:
+        tmp_db = '/tmp/library.db'
+        if not os.path.exists(tmp_db) and os.path.exists(src_db):
+            try:
+                import shutil
+                shutil.copyfile(src_db, tmp_db)
+            except Exception as e:
+                pass
+        return tmp_db
+    return src_db
+
+@app.errorhandler(500)
+def handle_500(err):
+    import traceback
+    return jsonify({
+        "error": f"Internal Server Error: {str(err)}",
+        "traceback": traceback.format_exc()
+    }), 500
 
 # --- TEST CASES DATA ---
 TEST_CASES = [
