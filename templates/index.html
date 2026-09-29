@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Library & QA Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .spinner {
+            border: 3px solid rgba(0,0,0,0.1);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: #4F46E5;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .typing-line {
+            overflow: hidden;
+            border-right: .15em solid orange;
+            white-space: nowrap;
+            margin: 0 auto;
+            letter-spacing: .15em;
+            animation: 
+                typing 1s steps(40, end),
+                blink-caret .75s step-end infinite;
+        }
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: orange; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans h-screen overflow-hidden flex">
+
+    <!-- Auth Container -->
+    <div id="auth-container" class="w-full h-full flex items-center justify-center bg-slate-100 absolute z-50">
+        <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md border-t-4 border-indigo-600">
+            <h2 class="text-2xl font-bold text-center text-slate-800 mb-6" id="auth-title">Login</h2>
+            
+            <div class="flex border-b mb-6">
+                <button class="flex-1 py-2 font-semibold text-indigo-600 border-b-2 border-indigo-600" id="tab-login" onclick="switchAuthTab('login')">Login</button>
+                <button class="flex-1 py-2 font-semibold text-slate-400 border-b-2 border-transparent" id="tab-register" onclick="switchAuthTab('register')">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700">Username</label>
+                    <input type="text" id="login-username" class="mt-1 w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-700">Password</label>
+                    <input type="password" id="login-password" class="mt-1 w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div id="login-error" class="text-red-500 text-sm mb-4 hidden"></div>
+                <button type="submit" class="w-full bg-indigo-600 text-white p-2 rounded hover:bg-indigo-700 transition">Login</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" class="hidden" onsubmit="handleRegister(event)">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700">Full Name</label>
+                    <input type="text" id="reg-fullname" class="mt-1 w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700">Email</label>
+                    <input type="email" id="reg-email" class="mt-1 w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700">Username</label>
+                    <input type="text" id="reg-username" class="mt-1 w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-700">Password</label>
+                    <input type="password" id="reg-password" class="mt-1 w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div id="reg-error" class="text-red-500 text-sm mb-4 hidden"></div>
+                <button type="submit" class="w-full bg-indigo-600 text-white p-2 rounded hover:bg-indigo-700 transition">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="w-full h-full flex hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-800 text-slate-300 flex flex-col h-full hidden md:flex transition-all duration-300 z-40" id="sidebar">
+            <div class="h-16 flex items-center px-6 bg-slate-900 text-white font-bold text-lg tracking-wide border-b border-slate-700">
+                <i class="fas fa-book-reader mr-3 text-indigo-400"></i> LMS Pro
+            </div>
+            <div class="flex-1 overflow-y-auto py-4">
+                <ul class="space-y-1" id="nav-links">
+                    <!-- Nav links injected via JS based on role -->
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <!-- Header -->
+            <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 border-b border-slate-200 z-30">
+                <div class="flex items-center">
+                    <button class="md:hidden text-slate-500 hover:text-slate-700 mr-4" onclick="toggleSidebar()">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <h1 class="text-xl font-semibold text-slate-800" id="page-title">Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm">
+                        <span class="text-slate-500">Welcome, </span>
+                        <span class="font-medium text-slate-800" id="user-display-name">User</span>
+                        <span class="ml-2 px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800" id="user-role-badge">Role</span>
+                    </div>
+                    <button onclick="handleLogout()" class="text-slate-500 hover:text-red-600 transition" title="Logout">
+                        <i class="fas fa-sign-out-alt text-lg"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="flex-1 overflow-y-auto p-6 bg-slate-50 relative" id="main-content">
+                <!-- Content injected here -->
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals Overlay -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex items-center justify-center">
+        <div id="modal-content" class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <!-- Modal content injected here -->
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        const state = {
+            user: null,
+            currentPage: 'dashboard',
+            books: [],
+            borrowings: [],
+            members: [],
+            fines: [],
+            testCases: [],
+            defects: [],
+            dashboardStats: null
+        };
+
+        const BASE_URL = '/api';
+
+        // --- API HELPER ---
+        async function api(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: {},
+                credentials: 'same-origin'
+            };
+            if (body) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+            try {
+                const response = await fetch(`${BASE_URL}${endpoint}`, options);
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                }
+                return data;
+            } catch (error) {
+                console.error(`API Error (${method} ${endpoint}):`, error);
+                throw error;
+            }
+        }
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-emerald-500',
+                error: 'bg-red-500',
+                warning: 'bg-amber-500',
+                info: 'bg-blue-500'
+            };
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+
+            toast.className = `${colors[type]} text-white px-4 py-3 rounded shadow-lg flex items-center space-x-3 transition-opacity duration-300 opacity-0`;
+            toast.innerHTML = `
+                <i class="fas ${icons[type]} text-lg"></i>
+                <span class="font-medium">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Fade in
+            setTimeout(() => toast.classList.remove('opacity-0'), 10);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- AUTHENTICATION ---
+        function switchAuthTab(tab) {
+            if (tab === 'login') {
+                document.getElementById('login-form').classList.remove('hidden');
+                document.getElementById('register-form').classList.add('hidden');
+                document.getElementById('tab-login').className = 'flex-1 py-2 font-semibold text-indigo-600 border-b-2 border-indigo-600';
+                document.getElementById('tab-register').className = 'flex-1 py-2 font-semibold text-slate-400 border-b-2 border-transparent';
+                document.getElementById('auth-title').innerText = 'Login';
+            } else {
+                document.getElementById('login-form').classList.add('hidden');
+                document.getElementById('register-form').classList.remove('hidden');
+                document.getElementById('tab-login').className = 'flex-1 py-2 font-semibold text-slate-400 border-b-2 border-transparent';
+                document.getElementById('tab-register').className = 'flex-1 py-2 font-semibold text-indigo-600 border-b-2 border-indigo-600';
+                document.getElementById('auth-title').innerText = 'Register';
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const errorDiv = document.getElementById('login-error');
+            errorDiv.classList.add('hidden');
+            
+            try {
+                await api('/login', 'POST', {
+                    username: document.getElementById('login-username').value,
+                    password: document.getElementById('login-password').value
+                });
+                showToast('Login successful', 'success');
+                await checkSession();
+            } catch (err) {
+                errorDiv.innerText = err.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const errorDiv = document.getElementById('reg-error');
+            errorDiv.classList.add('hidden');
+            
+            try {
+                await api('/register', 'POST', {
+                    full_name: document.getElementById('reg-fullname').value,
+                    email: document.getElementById('reg-email').value,
+                    username: document.getElementById('reg-username').value,
+                    password: document.getElementById('reg-password').value
+                });
+                showToast('Registration successful! Please login.', 'success');
+                switchAuthTab('login');
+                document.getElementById('login-username').value = document.getElementById('reg-username').value;
+            } catch (err) {
+                errorDiv.innerText = err.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await api('/logout', 'POST');
+                state.user = null;
+                showAuth();
+                showToast('Logged out successfully', 'info');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function checkSession() {
+            try {
+                const data = await api('/session');
+                if (data.logged_in) {
+                    state.user = data;
+                    document.getElementById('user-display-name').innerText = data.username;
+                    document.getElementById('user-role-badge').innerText = data.role.toUpperCase();
+                    showApp();
+                } else {
+                    showAuth();
+                }
+            } catch (err) {
+                showAuth();
+            }
+        }
+
+        function showAuth() {
+            document.getElementById('auth-container').classList.remove('hidden');
+            document.getElementById('app-container').classList.add('hidden');
+        }
+
+        function showApp() {
+            document.getElementById('auth-container').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('hidden');
+            buildNavigation();
+            navigateTo('dashboard');
+        }
+
+        // --- NAVIGATION & ROUTING ---
+        const navItems = [
+            { id: 'dashboard', label: 'Dashboard', icon: 'fa-home', roles: ['admin', 'librarian', 'student'] },
+            { id: 'catalog', label: 'Book Catalog', icon: 'fa-book', roles: ['admin', 'librarian', 'student'] },
+            { id: 'borrowings', label: 'My Borrowings', icon: 'fa-clipboard-list', roles: ['student'] },
+            { id: 'issue-return', label: 'Issue / Return', icon: 'fa-exchange-alt', roles: ['admin', 'librarian'] },
+            { id: 'members', label: 'Members', icon: 'fa-users', roles: ['admin', 'librarian'] },
+            { id: 'add-book', label: 'Add Book', icon: 'fa-plus-circle', roles: ['admin', 'librarian'] },
+            { divider: true, roles: ['admin', 'librarian', 'student'] },
+            { id: 'qa-dashboard', label: 'QA Dashboard', icon: 'fa-chart-pie', roles: ['admin', 'librarian', 'student'] },
+            { id: 'test-cases', label: 'Test Cases', icon: 'fa-tasks', roles: ['admin', 'librarian', 'student'] },
+            { id: 'bug-tracker', label: 'Bug Tracker', icon: 'fa-bug', roles: ['admin', 'librarian', 'student'] },
+            { id: 'automation', label: 'Automation Console', icon: 'fa-terminal', roles: ['admin', 'librarian', 'student'] }
+        ];
+
+        function buildNavigation() {
+            const nav = document.getElementById('nav-links');
+            nav.innerHTML = '';
+            
+            navItems.forEach(item => {
+                if (!item.roles.includes(state.user.role)) return;
+
+                if (item.divider) {
+                    const li = document.createElement('li');
+                    li.className = 'my-4 border-t border-slate-700';
+                    nav.appendChild(li);
+                    return;
+                }
+
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <a href="#" onclick="navigateTo('${item.id}'); return false;" 
+                       class="flex items-center px-6 py-3 text-slate-300 hover:bg-slate-700 hover:text-white transition group ${state.currentPage === item.id ? 'bg-indigo-600 text-white hover:bg-indigo-700' : ''}" 
+                       id="nav-${item.id}">
+                        <i class="fas ${item.icon} w-6 text-center text-slate-400 group-hover:text-indigo-400 ${state.currentPage === item.id ? 'text-white group-hover:text-white' : ''}"></i>
+                        <span class="ml-3 font-medium">${item.label}</span>
+                    </a>
+                `;
+                nav.appendChild(li);
+            });
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+        }
+
+        async function navigateTo(pageId) {
+            state.currentPage = pageId;
+            buildNavigation(); // Update active state
+            
+            const titleMap = navItems.find(i => i.id === pageId);
+            if(titleMap) document.getElementById('page-title').innerText = titleMap.label;
+
+            const main = document.getElementById('main-content');
+            main.innerHTML = `<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>`;
+
+            try {
+                switch (pageId) {
+                    case 'dashboard': await renderDashboard(main); break;
+                    case 'catalog': await renderCatalog(main); break;
+                    case 'borrowings': await renderBorrowings(main); break;
+                    case 'issue-return': await renderIssueReturn(main); break;
+                    case 'members': await renderMembers(main); break;
+                    case 'add-book': await renderAddBook(main); break;
+                    case 'qa-dashboard': await renderQADashboard(main); break;
+                    case 'test-cases': await renderTestCases(main); break;
+                    case 'bug-tracker': await renderBugTracker(main); break;
+                    case 'automation': await renderAutomation(main); break;
+                    default: main.innerHTML = '<h2>Page not found</h2>';
+                }
+            } catch (err) {
+                main.innerHTML = `<div class="text-red-500 bg-red-50 p-4 rounded-lg border border-red-200">Error loading page: ${err.message}</div>`;
+            }
+        }
+
+        // --- PAGE RENDERING FUNCTIONS ---
+
+        // 1. DASHBOARD
+        async function renderDashboard(container) {
+            // Depending on role, fetch different stats
+            let statsHtml = '';
+            if ((state.user.role === 'admin' || state.user.role === 'librarian')) {
+                const members = await api('/members');
+                const books = await api('/books');
+                const borrowings = await api('/borrowings');
+                
+                const activeLoans = borrowings.filter(b => b.status === 'Issued').length;
+                const overdue = borrowings.filter(b => b.status === 'Issued' && new Date(b.due_date) < new Date()).length;
+                
+                statsHtml = `
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        ${createStatCard('Total Books', books.length, 'fa-book', 'bg-indigo-500')}
+                        ${createStatCard('Active Borrowings', activeLoans, 'fa-hand-holding', 'bg-blue-500')}
+                        ${createStatCard('Overdue', overdue, 'fa-clock', 'bg-red-500')}
+                        ${createStatCard('Total Members', members.length, 'fa-users', 'bg-emerald-500')}
+                    </div>
+                `;
+            } else {
+                const books = await api('/books');
+                const borrowings = await api('/borrowings');
+                const myLoans = borrowings.filter(b => b.status === 'Issued');
+                const myOverdue = myLoans.filter(b => new Date(b.due_date) < new Date());
+                const totalFines = borrowings.reduce((sum, b) => sum + (b.fine_amount || 0), 0);
+
+                statsHtml = `
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        ${createStatCard('Available Books', books.filter(b=>b.status==='Available').length, 'fa-book', 'bg-indigo-500')}
+                        ${createStatCard('My Active Loans', myLoans.length, 'fa-book-reader', 'bg-blue-500')}
+                        ${createStatCard('My Overdue', myOverdue.length, 'fa-clock', 'bg-red-500')}
+                        ${createStatCard('My Fines', '$' + totalFines.toFixed(2), 'fa-money-bill', 'bg-amber-500')}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = `
+                ${statsHtml}
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Welcome to LMS Pro</h3>
+                    <p class="text-slate-600 mb-4">Manage your library resources efficiently. Use the sidebar to navigate through the system.</p>
+                </div>
+            `;
+        }
+
+        function createStatCard(title, value, icon, bgColor) {
+            return `
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center">
+                    <div class="rounded-full ${bgColor} text-white w-12 h-12 flex items-center justify-center text-xl mr-4 shadow-sm">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-slate-500">${title}</div>
+                        <div class="text-2xl font-bold text-slate-800">${value}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 2. CATALOG
+        async function renderCatalog(container) {
+            const books = await api('/books');
+            state.books = books;
+
+            let categories = [...new Set(books.map(b => b.category))];
+            
+            container.innerHTML = `
+                <div class="mb-6 flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex-1 flex flex-col sm:flex-row gap-4 w-full">
+                        <div class="relative flex-1">
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="search-books" placeholder="Search title, author, ISBN..." class="pl-10 pr-4 py-2 w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onkeyup="filterBooks()">
+                        </div>
+                        <select id="filter-category" class="w-full sm:w-48 border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500" onchange="filterBooks()">
+                            <option value="">All Categories</option>
+                            ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                        </select>
+                    </div>
+                    ${(state.user.role === 'admin' || state.user.role === 'librarian') ? `
+                        <button onclick="navigateTo('add-book')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center transition shadow-sm whitespace-nowrap">
+                            <i class="fas fa-plus mr-2"></i> Add Book
+                        </button>
+                    ` : ''}
+                </div>
+                <div id="books-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    ${generateBooksHTML(books)}
+                </div>
+            `;
+        }
+
+        function generateBooksHTML(booksList) {
+            if (booksList.length === 0) return `<div class="col-span-full text-center py-10 text-slate-500">No books found.</div>`;
+            
+            return booksList.map(book => {
+                let statusBadge = '';
+                if (book.status === 'Available') statusBadge = '<span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full font-semibold border border-emerald-200">Available</span>';
+                else if (book.status === 'Reserved') statusBadge = '<span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-semibold border border-amber-200">Reserved</span>';
+                else statusBadge = '<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full font-semibold border border-red-200">Issued</span>';
+
+                let actionBtn = '';
+                if (state.user.role === 'student' && book.status === 'Available') {
+                    actionBtn = `<button onclick="reserveBook(${book.id})" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-medium transition">Reserve</button>`;
+                } else if ((state.user.role === 'admin' || state.user.role === 'librarian')) {
+                    if (book.status === 'Available' || book.status === 'Reserved') {
+                        actionBtn = `<button onclick="openIssueModal(${book.id}, '${book.title.replace(/'/g, "\\\\'")}')" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium transition">Issue Book</button>`;
+                    } else if (book.status === 'Issued') {
+                        actionBtn = `<button onclick="returnBook(${book.id})" class="mt-4 w-full bg-slate-600 hover:bg-slate-700 text-white py-2 rounded-lg text-sm font-medium transition">Return</button>`;
+                    }
+                }
+
+                return `
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col hover:shadow-md transition">
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">${book.category}</span>
+                            ${statusBadge}
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 leading-tight mb-1 line-clamp-2">${book.title}</h3>
+                        <p class="text-sm text-slate-500 mb-2">${book.author}</p>
+                        <p class="text-xs text-slate-400 mb-4 font-mono">ISBN: ${book.isbn}</p>
+                        <div class="mt-auto">
+                            ${book.borrower_name ? `<p class="text-xs text-amber-600 mb-2"><i class="fas fa-user mr-1"></i> ${book.borrower_name}</p>` : ''}
+                            ${actionBtn}
+                            ${(state.user.role === 'admin' || state.user.role === 'librarian') ? `<button onclick="deleteBook(${book.id})" class="mt-2 w-full text-red-600 hover:bg-red-50 py-1.5 rounded-lg text-xs font-medium transition border border-transparent hover:border-red-200">Delete</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterBooks() {
+            const q = document.getElementById('search-books').value.toLowerCase();
+            const cat = document.getElementById('filter-category').value;
+            const filtered = state.books.filter(b => 
+                (b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.isbn.includes(q)) &&
+                (cat === '' || b.category === cat)
+            );
+            document.getElementById('books-grid').innerHTML = generateBooksHTML(filtered);
+        }
+
+        async function reserveBook(id) {
+            try {
+                await api(`/books/${id}/reserve`, 'POST');
+                showToast('Book reserved successfully', 'success');
+                navigateTo('catalog');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteBook(id) {
+            if(!confirm('Are you sure you want to delete this book?')) return;
+            try {
+                await api(`/books/${id}`, 'DELETE');
+                showToast('Book deleted', 'success');
+                navigateTo('catalog');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // Issue Modal for Admin
+        async function openIssueModal(bookId, bookTitle) {
+            const members = await api('/members');
+            const modal = document.getElementById('modal-content');
+            
+            modal.innerHTML = `
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold">Issue Book</h3>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <p class="mb-4 text-slate-600">Book: <strong>${bookTitle}</strong></p>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Select Member</label>
+                        <select id="issue-student-id" class="w-full border border-slate-300 rounded p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            ${members.map(m => `<option value="${m.id}">${m.full_name} (@${m.username})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button onclick="closeModal()" class="px-4 py-2 border rounded text-slate-600 hover:bg-slate-50">Cancel</button>
+                        <button onclick="submitIssue(${bookId})" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Issue Book</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        async function submitIssue(bookId) {
+            const studentId = document.getElementById('issue-student-id').value;
+            try {
+                await api(`/books/${bookId}/issue`, 'POST', { student_id: parseInt(studentId) });
+                showToast('Book issued successfully', 'success');
+                closeModal();
+                if(state.currentPage === 'catalog') navigateTo('catalog');
+                if(state.currentPage === 'issue-return') navigateTo('issue-return');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function returnBook(bookId) {
+            try {
+                const res = await api(`/books/${bookId}/return`, 'POST');
+                let msg = 'Book returned successfully.';
+                if(res.fine_amount > 0) msg += ` Fine generated: $${res.fine_amount}`;
+                showToast(msg, res.fine_amount > 0 ? 'warning' : 'success');
+                
+                if(state.currentPage === 'catalog') navigateTo('catalog');
+                if(state.currentPage === 'issue-return') navigateTo('issue-return');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // 3. MY BORROWINGS (Student)
+        async function renderBorrowings(container) {
+            const allBorrowings = await api('/borrowings');
+            const myLoans = (state.user.role === 'student') ? allBorrowings : allBorrowings.filter(b => b.user_full_name === state.user.full_name);
+
+            if(myLoans.length === 0) {
+                container.innerHTML = `<div class="bg-white p-8 rounded-xl text-center shadow-sm text-slate-500">You have no active or past borrowings.</div>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                            <tr>
+                                <th class="p-4 font-semibold">Book Title</th>
+                                <th class="p-4 font-semibold">Issue Date</th>
+                                <th class="p-4 font-semibold">Due Date</th>
+                                <th class="p-4 font-semibold">Status</th>
+                                <th class="p-4 font-semibold">Fine</th>
+                                <th class="p-4 font-semibold">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${myLoans.map(loan => {
+                                const isOverdue = loan.status === 'Issued' && new Date(loan.due_date) < new Date();
+                                const statusClass = loan.status === 'Returned' ? 'text-emerald-600 bg-emerald-50' : 
+                                                  (isOverdue ? 'text-red-600 bg-red-50' : 'text-blue-600 bg-blue-50');
+                                
+                                let actionBtn = '-';
+                                if (loan.fine_amount > 0 && !loan.fine_paid) {
+                                    actionBtn = `<button onclick="payFine(${loan.id})" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded text-xs font-medium">Pay Fine</button>`;
+                                } else if (loan.fine_amount > 0 && loan.fine_paid) {
+                                    actionBtn = `<span class="text-emerald-600 text-xs font-semibold"><i class="fas fa-check"></i> Paid</span>`;
+                                }
+
+                                return `
+                                    <tr class="hover:bg-slate-50 transition">
+                                        <td class="p-4 font-medium text-slate-800">${loan.book_title}</td>
+                                        <td class="p-4 text-slate-500">${loan.issue_date}</td>
+                                        <td class="p-4 ${isOverdue ? 'text-red-600 font-bold' : 'text-slate-500'}">${loan.due_date}</td>
+                                        <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusClass}">${loan.status}${isOverdue ? ' (Overdue)' : ''}</span></td>
+                                        <td class="p-4 ${loan.fine_amount > 0 && !loan.fine_paid ? 'text-red-600 font-bold' : 'text-slate-500'}">
+                                            ${loan.fine_amount > 0 ? '$'+loan.fine_amount.toFixed(2) : '-'}
+                                        </td>
+                                        <td class="p-4">${actionBtn}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        async function payFine(borrowingId) {
+            try {
+                await api(`/fines/${borrowingId}/pay`, 'POST');
+                showToast('Fine paid successfully', 'success');
+                if(state.currentPage === 'borrowings') navigateTo('borrowings');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // 4. ISSUE / RETURN (Admin)
+        async function renderIssueReturn(container) {
+            const books = await api('/books');
+            const reserved = books.filter(b => b.status === 'Reserved');
+            const issued = books.filter(b => b.status === 'Issued');
+
+            container.innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Pending Reservations -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-amber-50 px-6 py-4 border-b border-amber-100 flex items-center">
+                            <i class="fas fa-clock text-amber-500 mr-2"></i>
+                            <h3 class="font-bold text-amber-800">Pending Reservations</h3>
+                        </div>
+                        <div class="p-0">
+                            ${reserved.length === 0 ? '<p class="p-6 text-slate-500 text-center">No pending reservations.</p>' : `
+                                <ul class="divide-y divide-slate-100">
+                                    ${reserved.map(b => `
+                                        <li class="p-4 flex justify-between items-center hover:bg-slate-50">
+                                            <div>
+                                                <p class="font-bold text-slate-800">${b.title}</p>
+                                                <p class="text-xs text-slate-500">Reserved by: ${b.borrower_name || 'Unknown'}</p>
+                                            </div>
+                                            <button onclick="openIssueModal(${b.id}, '${b.title.replace(/'/g, "\\\\'")}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded text-sm font-medium">Issue</button>
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- Active Issues -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-blue-50 px-6 py-4 border-b border-blue-100 flex items-center">
+                            <i class="fas fa-book-reader text-blue-500 mr-2"></i>
+                            <h3 class="font-bold text-blue-800">Active Issues</h3>
+                        </div>
+                        <div class="p-0 max-h-[600px] overflow-y-auto">
+                            ${issued.length === 0 ? '<p class="p-6 text-slate-500 text-center">No active issues.</p>' : `
+                                <ul class="divide-y divide-slate-100">
+                                    ${issued.map(b => `
+                                        <li class="p-4 flex justify-between items-center hover:bg-slate-50">
+                                            <div>
+                                                <p class="font-bold text-slate-800">${b.title}</p>
+                                                <p class="text-xs text-slate-500">Issued to: <span class="font-semibold text-indigo-600">${b.borrower_name}</span></p>
+                                            </div>
+                                            <button onclick="returnBook(${b.id})" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-1.5 rounded text-sm font-medium">Return</button>
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 5. MEMBERS (Admin)
+        async function renderMembers(container) {
+            const members = await api('/members');
+            
+            container.innerHTML = `
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-slate-800">Library Members (${members.length})</h2>
+                    <button onclick="openMemberModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow font-medium flex items-center transition text-sm">
+                        <i class="fas fa-user-plus mr-2"></i> Add Member
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                            <tr>
+                                <th class="p-4 font-semibold">Name</th>
+                                <th class="p-4 font-semibold">Username</th>
+                                <th class="p-4 font-semibold">Email</th>
+                                <th class="p-4 font-semibold text-center">Active Borrowings</th>
+                                <th class="p-4 font-semibold text-right">Total Fines</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${members.map(m => `
+                                <tr class="hover:bg-slate-50 transition">
+                                    <td class="p-4 font-medium text-slate-800 flex items-center">
+                                        <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold mr-3">
+                                            ${m.full_name.charAt(0).toUpperCase()}
+                                        </div>
+                                        ${m.full_name}
+                                    </td>
+                                    <td class="p-4 text-slate-500">@${m.username}</td>
+                                    <td class="p-4 text-slate-500">${m.email}</td>
+                                    <td class="p-4 text-center">
+                                        <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-bold">${m.active_borrowings}</span>
+                                    </td>
+                                    <td class="p-4 text-right font-mono ${m.total_fines > 0 ? 'text-red-600 font-bold' : 'text-slate-500'}">
+                                        $${(m.total_fines || 0).toFixed(2)}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // 6. ADD BOOK (Admin)
+        async function renderAddBook(container) {
+            container.innerHTML = `
+                <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b pb-4">Add New Book</h2>
+                    <form onsubmit="submitAddBook(event)" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Title</label>
+                            <input type="text" id="add-title" required class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Author</label>
+                            <input type="text" id="add-author" required class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">ISBN (13 digits)</label>
+                            <input type="text" id="add-isbn" pattern="[0-9]{13}" title="Please enter exactly 13 digits" required class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                            <select id="add-category" required class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                                <option value="">Select Category</option>
+                                <option value="Computer Science">Computer Science</option>
+                                <option value="Software Engineering">Software Engineering</option>
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="Physics">Physics</option>
+                                <option value="Literature">Literature</option>
+                                <option value="Fiction">Fiction</option>
+                            </select>
+                        </div>
+                        <div class="pt-4">
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow transition">
+                                <i class="fas fa-plus mr-2"></i> Add Book to Catalog
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        async function submitAddBook(e) {
+            e.preventDefault();
+            const body = {
+                title: document.getElementById('add-title').value,
+                author: document.getElementById('add-author').value,
+                isbn: document.getElementById('add-isbn').value,
+                category: document.getElementById('add-category').value
+            };
+            try {
+                await api('/books', 'POST', body);
+                showToast('Book added successfully', 'success');
+                e.target.reset();
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // 7. QA DASHBOARD
+        async function renderQADashboard(container) {
+            const stats = await api('/dashboard-stats');
+            
+            const kpiCards = `
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 text-center shadow-sm">
+                        <div class="text-slate-500 text-xs font-bold uppercase mb-1">Total Tests</div>
+                        <div class="text-2xl font-bold text-slate-800">${stats.total_test_cases}</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-emerald-200 text-center shadow-sm">
+                        <div class="text-emerald-600 text-xs font-bold uppercase mb-1">Passed</div>
+                        <div class="text-2xl font-bold text-emerald-700">${stats.passed}</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-red-200 text-center shadow-sm">
+                        <div class="text-red-500 text-xs font-bold uppercase mb-1">Failed</div>
+                        <div class="text-2xl font-bold text-red-600">${stats.failed}</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 text-center shadow-sm">
+                        <div class="text-slate-500 text-xs font-bold uppercase mb-1">Defects</div>
+                        <div class="text-2xl font-bold text-slate-800">${stats.total_defects}</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-blue-200 text-center shadow-sm">
+                        <div class="text-blue-500 text-xs font-bold uppercase mb-1">Resolved</div>
+                        <div class="text-2xl font-bold text-blue-600">${stats.resolved_defects}</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-amber-200 text-center shadow-sm">
+                        <div class="text-amber-500 text-xs font-bold uppercase mb-1">Open</div>
+                        <div class="text-2xl font-bold text-amber-600">${stats.open_defects}</div>
+                    </div>
+                </div>
+            `;
+
+            // Severity Breakdown Bars
+            const totalS = Object.values(stats.severity_breakdown).reduce((a,b)=>a+b,0) || 1;
+            const severityHtml = `
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Defect Severity Breakdown</h3>
+                    <div class="space-y-4">
+                        ${renderProgressBar('Critical', stats.severity_breakdown.Critical, totalS, 'bg-red-500')}
+                        ${renderProgressBar('High', stats.severity_breakdown.High, totalS, 'bg-orange-500')}
+                        ${renderProgressBar('Medium', stats.severity_breakdown.Medium, totalS, 'bg-amber-400')}
+                        ${renderProgressBar('Low', stats.severity_breakdown.Low, totalS, 'bg-emerald-500')}
+                    </div>
+                </div>
+            `;
+
+            // Test Type Distribution
+            const totalT = Object.values(stats.test_type_distribution).reduce((a,b)=>a+b,0) || 1;
+            const typeHtml = `
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Test Type Distribution</h3>
+                    <div class="space-y-3">
+                        ${Object.entries(stats.test_type_distribution).map(([k, v]) => renderProgressBar(k.replace('_', ' '), v, totalT, 'bg-indigo-500')).join('')}
+                    </div>
+                </div>
+            `;
+
+            // Exports
+            const exportHtml = `
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm md:col-span-2 flex flex-col sm:flex-row gap-4 items-center justify-center mt-6">
+                    <h3 class="text-lg font-bold text-slate-800 mr-4">Export Reports:</h3>
+                    <button onclick="window.open('${BASE_URL}/export/test-cases')" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded shadow flex items-center"><i class="fas fa-download mr-2"></i> Test Cases CSV</button>
+                    <button onclick="window.open('${BASE_URL}/export/defects')" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded shadow flex items-center"><i class="fas fa-download mr-2"></i> Defects CSV</button>
+                    <button onclick="window.open('${BASE_URL}/export/summary')" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded shadow flex items-center"><i class="fas fa-download mr-2"></i> Summary Report</button>
+                </div>
+            `;
+
+            container.innerHTML = `
+                ${kpiCards}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    ${severityHtml}
+                    ${typeHtml}
+                </div>
+                ${exportHtml}
+            `;
+        }
+
+        function renderProgressBar(label, val, total, colorClass) {
+            const pct = Math.round((val / total) * 100) || 0;
+            return `
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium text-slate-700">${label}</span>
+                        <span class="text-slate-500">${val} (${pct}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-2">
+                        <div class="${colorClass} h-2 rounded-full" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 8. TEST CASES
+        async function renderTestCases(container) {
+            const tcs = await api('/test-cases');
+            state.testCases = tcs;
+
+            const modules = [...new Set(tcs.map(t => t.module))];
+            const types = [...new Set(tcs.map(t => t.test_type))];
+
+            container.innerHTML = `
+                <div class="mb-4 flex flex-wrap justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <select id="tc-module" onchange="filterTestCases()" class="border border-slate-300 rounded p-2 text-sm outline-none focus:border-indigo-500">
+                            <option value="">All Modules</option>
+                            ${modules.map(m => `<option value="${m}">${m}</option>`).join('')}
+                        </select>
+                        <select id="tc-status" onchange="filterTestCases()" class="border border-slate-300 rounded p-2 text-sm outline-none focus:border-indigo-500">
+                            <option value="">All Statuses</option>
+                            <option value="Pass">Pass</option>
+                            <option value="Fail">Fail</option>
+                        </select>
+                        <select id="tc-type" onchange="filterTestCases()" class="border border-slate-300 rounded p-2 text-sm outline-none focus:border-indigo-500">
+                            <option value="">All Types</option>
+                            ${types.map(t => `<option value="${t}">${t.replace('_', ' ')}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button onclick="openTestCaseModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow font-medium flex items-center transition text-sm">
+                        <i class="fas fa-plus-circle mr-2"></i> Add Test Case
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-left text-sm whitespace-nowrap min-w-max">
+                        <thead class="bg-slate-800 text-white">
+                            <tr>
+                                <th class="p-3 font-semibold">ID</th>
+                                <th class="p-3 font-semibold">Module</th>
+                                <th class="p-3 font-semibold">Test Scenario</th>
+                                <th class="p-3 font-semibold">Type</th>
+                                <th class="p-3 font-semibold">Input Data</th>
+                                <th class="p-3 font-semibold">Expected Result</th>
+                                <th class="p-3 font-semibold">Actual Result</th>
+                                <th class="p-3 font-semibold">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tc-body" class="divide-y divide-slate-200">
+                            ${generateTestCasesHTML(tcs)}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function generateTestCasesHTML(tcs) {
+            return tcs.map(tc => {
+                const statusClass = tc.status === 'Pass' ? 'bg-emerald-100 text-emerald-800' : (tc.status==='Fail' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800');
+                const rowClass = tc.status === 'Pass' ? 'hover:bg-emerald-50' : (tc.status==='Fail' ? 'hover:bg-red-50' : 'hover:bg-slate-50');
+                return `
+                    <tr class="${rowClass} transition">
+                        <td class="p-3 font-mono text-xs text-slate-500">${tc.id}</td>
+                        <td class="p-3 font-semibold text-slate-700">${tc.module}</td>
+                        <td class="p-3 whitespace-normal min-w-[200px]">${tc.scenario}</td>
+                        <td class="p-3"><span class="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded border border-indigo-200">${tc.test_type.replace('_',' ')}</span></td>
+                        <td class="p-3 font-mono text-xs text-slate-600 whitespace-normal min-w-[150px]">${tc.input_data || '-'}</td>
+                        <td class="p-3 text-emerald-700 whitespace-normal min-w-[150px]">${tc.expected_result}</td>
+                        <td class="p-3 text-slate-600 whitespace-normal min-w-[150px]">${tc.actual_result}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-1 rounded-full text-xs font-bold border ${statusClass}">${tc.status}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterTestCases() {
+            const mod = document.getElementById('tc-module').value;
+            const stat = document.getElementById('tc-status').value;
+            const type = document.getElementById('tc-type').value;
+
+            const filtered = state.testCases.filter(tc => 
+                (mod === '' || tc.module === mod) &&
+                (stat === '' || tc.status === stat) &&
+                (type === '' || tc.test_type === type)
+            );
+            document.getElementById('tc-body').innerHTML = generateTestCasesHTML(filtered);
+        }
+
+        // 9. BUG TRACKER
+        async function renderBugTracker(container) {
+            const defects = await api('/defects');
+            state.defects = defects;
+
+            container.innerHTML = `
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-slate-800">Defect Repository</h2>
+                    <button onclick="openDefectModal()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow font-medium flex items-center transition">
+                        <i class="fas fa-bug mr-2"></i> Report Defect
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table class="w-full text-left text-sm whitespace-nowrap min-w-max">
+                        <thead class="bg-slate-100 text-slate-700 border-b border-slate-300">
+                            <tr>
+                                <th class="p-3 font-semibold">Bug ID</th>
+                                <th class="p-3 font-semibold">Module</th>
+                                <th class="p-3 font-semibold">Steps to Reproduce</th>
+                                <th class="p-3 font-semibold">Severity</th>
+                                <th class="p-3 font-semibold">Priority</th>
+                                <th class="p-3 font-semibold">Status</th>
+                                <th class="p-3 font-semibold">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="defect-body" class="divide-y divide-slate-100">
+                            ${generateDefectsHTML(defects)}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function generateDefectsHTML(defects) {
+            if(defects.length === 0) return `<tr><td colspan="7" class="p-6 text-center text-slate-500">No defects logged.</td></tr>`;
+            
+            return defects.map(d => {
+                const sevColors = { 'Critical': 'bg-red-100 text-red-800 border-red-200', 'High': 'bg-orange-100 text-orange-800 border-orange-200', 'Medium': 'bg-amber-100 text-amber-800 border-amber-200', 'Low': 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+                const statColors = { 'Open': 'bg-red-500 text-white', 'In Progress': 'bg-amber-500 text-white', 'Closed': 'bg-emerald-500 text-white' };
+                
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-mono text-xs font-bold text-red-600">${d.bug_id}</td>
+                        <td class="p-3 font-semibold text-slate-700">${d.module}</td>
+                        <td class="p-3 whitespace-normal min-w-[250px] text-xs text-slate-600">${d.steps_to_reproduce}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-bold border ${sevColors[d.severity]}">${d.severity}</span></td>
+                        <td class="p-3 font-medium text-slate-600">${d.priority}</td>
+                        <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statColors[d.status]}">${d.status}</span></td>
+                        <td class="p-3">
+                            <button onclick='editDefect(${JSON.stringify(d).replace(/'/g, "&#39;")})' class="text-indigo-600 hover:text-indigo-800 bg-indigo-50 p-1.5 rounded" title="Edit Status">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function openDefectModal(defect = null) {
+            const isEdit = !!defect;
+            const modal = document.getElementById('modal-content');
+            
+            modal.innerHTML = `
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 class="text-xl font-bold text-slate-800 flex items-center">
+                            <i class="fas fa-bug text-red-500 mr-2"></i> ${isEdit ? 'Update Defect '+defect.bug_id : 'Report New Defect'}
+                        </h3>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-lg"></i></button>
+                    </div>
+                    <form onsubmit="submitDefect(event, ${isEdit ? defect.id : 'null'})" class="space-y-4">
+                        ${!isEdit ? `
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Module</label>
+                            <input type="text" id="def-module" required class="w-full p-2 border rounded focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Steps to Reproduce</label>
+                            <textarea id="def-steps" required rows="3" class="w-full p-2 border rounded focus:ring-indigo-500 outline-none text-sm"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Expected Result</label>
+                                <input type="text" id="def-exp" required class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Actual Result</label>
+                                <input type="text" id="def-act" required class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Severity</label>
+                                <select id="def-severity" class="w-full p-2 border rounded focus:ring-indigo-500 outline-none">
+                                    <option value="Critical" ${isEdit && defect.severity==='Critical'?'selected':''}>Critical</option>
+                                    <option value="High" ${isEdit && defect.severity==='High'?'selected':''}>High</option>
+                                    <option value="Medium" ${isEdit && defect.severity==='Medium'?'selected':''}>Medium</option>
+                                    <option value="Low" ${isEdit && defect.severity==='Low'?'selected':''}>Low</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                                <select id="def-priority" class="w-full p-2 border rounded focus:ring-indigo-500 outline-none">
+                                    <option value="P1" ${isEdit && defect.priority==='P1'?'selected':''}>P1 (Highest)</option>
+                                    <option value="P2" ${isEdit && defect.priority==='P2'?'selected':''}>P2</option>
+                                    <option value="P3" ${isEdit && defect.priority==='P3'?'selected':''}>P3</option>
+                                    <option value="P4" ${isEdit && defect.priority==='P4'?'selected':''}>P4 (Lowest)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        ${isEdit ? `
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <select id="def-status" class="w-full p-2 border rounded focus:ring-indigo-500 outline-none">
+                                <option value="Open" ${defect.status==='Open'?'selected':''}>Open</option>
+                                <option value="In Progress" ${defect.status==='In Progress'?'selected':''}>In Progress</option>
+                                <option value="Closed" ${defect.status==='Closed'?'selected':''}>Closed</option>
+                            </select>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="flex justify-end pt-4 border-t">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded mr-2 hover:bg-slate-50">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">${isEdit ? 'Update' : 'Submit'} Defect</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        function editDefect(defect) {
+            openDefectModal(defect);
+        }
+
+        async function submitDefect(e, id) {
+            e.preventDefault();
+            const isEdit = id !== null;
+            try {
+                if(isEdit) {
+                    await api(`/defects/${id}`, 'PUT', {
+                        severity: document.getElementById('def-severity').value,
+                        priority: document.getElementById('def-priority').value,
+                        status: document.getElementById('def-status').value
+                    });
+                    showToast('Defect updated successfully', 'success');
+                } else {
+                    await api('/defects', 'POST', {
+                        module: document.getElementById('def-module').value,
+                        steps_to_reproduce: document.getElementById('def-steps').value,
+                        expected_result: document.getElementById('def-exp').value,
+                        actual_result: document.getElementById('def-act').value,
+                        severity: document.getElementById('def-severity').value,
+                        priority: document.getElementById('def-priority').value
+                    });
+                    showToast('Defect logged successfully', 'success');
+                }
+                closeModal();
+                navigateTo('bug-tracker');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // --- ADD TEST CASE MODAL ---
+        function openTestCaseModal() {
+            const modal = document.getElementById('modal-content');
+            modal.innerHTML = `
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 class="text-xl font-bold text-slate-800 flex items-center">
+                            <i class="fas fa-clipboard-check text-indigo-600 mr-2"></i> Add New Test Case
+                        </h3>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-lg"></i></button>
+                    </div>
+                    <form onsubmit="submitTestCase(event)" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Module</label>
+                                <input type="text" id="tc-add-module" required placeholder="e.g. Authentication" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Test Type</label>
+                                <select id="tc-add-type" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                                    <option value="Functional">Functional</option>
+                                    <option value="Boundary">Boundary Value Analysis</option>
+                                    <option value="Security">Security</option>
+                                    <option value="Equivalence Partitioning">Equivalence Partitioning</option>
+                                    <option value="Decision Table">Decision Table</option>
+                                    <option value="State Transition">State Transition</option>
+                                    <option value="Automation">Automation</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Test Scenario</label>
+                            <input type="text" id="tc-add-scenario" required placeholder="Describe test objective" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Input Data</label>
+                            <input type="text" id="tc-add-input" placeholder="e.g. username='student1', password='abc'" class="w-full p-2 border rounded text-sm font-mono focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Expected Result</label>
+                                <input type="text" id="tc-add-expected" required placeholder="Expected outcome" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Actual Result</label>
+                                <input type="text" id="tc-add-actual" required placeholder="Observed outcome" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <select id="tc-add-status" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                                <option value="Pass">Pass</option>
+                                <option value="Fail">Fail</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end pt-4 border-t space-x-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded text-slate-600 hover:bg-slate-50 text-sm">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium">Add Test Case</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        async function submitTestCase(e) {
+            e.preventDefault();
+            try {
+                await api('/test-cases', 'POST', {
+                    module: document.getElementById('tc-add-module').value,
+                    scenario: document.getElementById('tc-add-scenario').value,
+                    test_type: document.getElementById('tc-add-type').value,
+                    input_data: document.getElementById('tc-add-input').value,
+                    expected_result: document.getElementById('tc-add-expected').value,
+                    actual_result: document.getElementById('tc-add-actual').value,
+                    status: document.getElementById('tc-add-status').value
+                });
+                showToast('New test case record added successfully!', 'success');
+                closeModal();
+                navigateTo('test-cases');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // --- ADD MEMBER MODAL ---
+        function openMemberModal() {
+            const modal = document.getElementById('modal-content');
+            modal.innerHTML = `
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 class="text-xl font-bold text-slate-800 flex items-center">
+                            <i class="fas fa-user-plus text-emerald-600 mr-2"></i> Add New Member Record
+                        </h3>
+                        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-lg"></i></button>
+                    </div>
+                    <form onsubmit="submitMember(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                            <input type="text" id="mem-fullname" required placeholder="e.g. Alex Morgan" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                                <input type="text" id="mem-username" required placeholder="e.g. alexm" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                                <input type="password" id="mem-password" required placeholder="Default: student123" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                <input type="email" id="mem-email" required placeholder="e.g. alex@library.com" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                                <select id="mem-role" class="w-full p-2 border rounded text-sm focus:ring-indigo-500 outline-none">
+                                    <option value="student">Student</option>
+                                    <option value="librarian">Librarian</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex justify-end pt-4 border-t space-x-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded text-slate-600 hover:bg-slate-50 text-sm">Cancel</button>
+                            <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-medium">Create Member</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        async function submitMember(e) {
+            e.preventDefault();
+            try {
+                await api('/members', 'POST', {
+                    full_name: document.getElementById('mem-fullname').value,
+                    username: document.getElementById('mem-username').value,
+                    password: document.getElementById('mem-password').value,
+                    email: document.getElementById('mem-email').value,
+                    role: document.getElementById('mem-role').value
+                });
+                showToast('New member record registered successfully!', 'success');
+                closeModal();
+                navigateTo('members');
+            } catch(err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // 10. AUTOMATION CONSOLE
+        async function renderAutomation(container) {
+            container.innerHTML = `
+                <div class="bg-slate-900 rounded-xl shadow-xl border border-slate-700 flex flex-col h-full max-h-[80vh]">
+                    <div class="bg-slate-800 px-4 py-3 rounded-t-xl border-b border-slate-700 flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <span class="ml-4 text-slate-300 font-mono text-sm">selenium-webdriver ~/lms/tests</span>
+                        </div>
+                        <button id="run-btn" onclick="runAutomation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded shadow font-mono text-sm transition flex items-center">
+                            <i class="fas fa-play mr-2"></i> Run Test Suite
+                        </button>
+                    </div>
+                    <div id="console-output" class="p-6 font-mono text-sm text-green-400 overflow-y-auto flex-1 hide-scrollbar" style="line-height: 1.6;">
+                        <div class="text-slate-500 mb-4">
+                            $ ./run_e2e_tests.sh<br>
+                            Click "Run Test Suite" to execute automated tests.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function runAutomation() {
+            const btn = document.getElementById('run-btn');
+            const out = document.getElementById('console-output');
+            
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Running...`;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            out.innerHTML = `<div><span class="text-indigo-400">INFO</span> [${new Date().toISOString()}] Initializing WebDriver...</div>`;
+            
+            try {
+                const res = await api('/run-automation', 'POST');
+                const results = Array.isArray(res) ? res : (res.results || []);
+                
+                let i = 0;
+                
+                // Animate sequence
+                const processTest = (testIndex) => {
+                    if(testIndex >= results.length) {
+                        finishAutomation(results);
+                        return;
+                    }
+                    
+                    const test = results[testIndex];
+                    const testDivId = `test-${testIndex}`;
+                    out.innerHTML += `<div id="${testDivId}" class="mt-4 border-l-2 border-slate-700 pl-4">
+                        <div class="font-bold text-white mb-2">> Running: ${test.name}</div>
+                    </div>`;
+                    
+                    let stepIndex = 0;
+                    const stepsDiv = document.getElementById(testDivId);
+                    
+                    const processStep = () => {
+                        if(stepIndex >= test.steps.length) {
+                            const statusColor = test.status === 'PASS' ? 'text-emerald-400' : 'text-red-400';
+                            stepsDiv.innerHTML += `<div class="mt-2 font-bold ${statusColor}">[${test.status}] ${test.name} (${test.duration}s)</div>`;
+                            out.scrollTop = out.scrollHeight;
+                            setTimeout(() => processTest(testIndex + 1), 300);
+                            return;
+                        }
+                        
+                        const step = test.steps[stepIndex];
+                        stepsDiv.innerHTML += `<div class="text-slate-400 opacity-80"><span class="text-slate-500">[${step.timestamp}]</span> ${step.message}</div>`;
+                        out.scrollTop = out.scrollHeight;
+                        stepIndex++;
+                        setTimeout(processStep, 150);
+                    };
+                    
+                    processStep();
+                };
+                
+                processTest(0);
+
+            } catch(err) {
+                out.innerHTML += `<div class="text-red-500 mt-4">FATAL ERROR: ${err.message}</div>`;
+                resetAutoBtn();
+            }
+
+            function finishAutomation(results) {
+                const passed = results.filter(r => r.status==='PASS').length;
+                const totalDur = results.reduce((sum, r) => sum + r.duration, 0).toFixed(2);
+                
+                out.innerHTML += `
+                    <div class="mt-8 border-t border-slate-700 pt-4 text-white">
+                        <div class="font-bold mb-2">==== TEST EXECUTION SUMMARY ====</div>
+                        <div>Total Tests: ${results.length}</div>
+                        <div class="text-emerald-400">Passed: ${passed}</div>
+                        <div class="text-red-400">Failed: ${results.length - passed}</div>
+                        <div class="text-indigo-400">Total Duration: ${totalDur}s</div>
+                        <div class="mt-4 text-emerald-500 font-bold typing-line w-auto inline-block">SUITE COMPLETED</div>
+                    </div>
+                `;
+                out.scrollTop = out.scrollHeight;
+                resetAutoBtn();
+            }
+
+            function resetAutoBtn() {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fas fa-play mr-2"></i> Run Test Suite`;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            checkSession();
+        };
+
+    </script>
+</body>
+</html>
